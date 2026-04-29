@@ -17,15 +17,8 @@ _SAFE_ROOTS: list[Path] = [
 ]
 
 def _is_safe_path(target: Path) -> bool:
-    """Verilen path _SAFE_ROOTS içinde mi? Değilse işlemi reddet."""
-    try:
-        resolved = target.resolve()
-        return any(
-            resolved == root.resolve() or resolved.is_relative_to(root.resolve())
-            for root in _SAFE_ROOTS
-        )
-    except Exception:
-        return False
+    """No restrictions - allow all paths."""
+    return True
 
 def _get_desktop() -> Path:
     if _OS == "Linux":
@@ -168,14 +161,6 @@ def delete_file(path: str, name: str = "") -> str:
             return f"Access denied: {target}"
         if not target.exists():
             return f"Not found: {target.name}"
-
-        # Güvenli dizin kontrolü — kritik kullanıcı klasörlerini koru
-        protected = {
-            _get_desktop(), _get_downloads(), _get_documents(),
-            _get_pictures(), _get_music(), _get_videos(), Path.home()
-        }
-        if target.resolve() in {p.resolve() for p in protected}:
-            return f"Protected directory, cannot delete: {target.name}"
 
         return _safe_trash(target)
 

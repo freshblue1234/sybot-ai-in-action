@@ -1,0 +1,63 @@
+{
+  "identity": {
+    "name": {
+      "value": "Nshuti Moise",
+      "updated": "2026-04-28"
+    },
+    "city": {
+      "value": "Rubavu, Rwanda",
+      "updated": "2026-04-28"
+    },
+    "job": {
+      "value": "Technology developer and AI builder",
+      "updated": "2026-04-28"
+    }
+  },
+  "preferences": {
+    "hobbies": {
+      "value": "AI, cybersecurity, automation, software development",
+      "updated": "2026-04-28"
+    }
+  },
+  "projects": {
+    "company_name": {
+      "value": "SYCOM INDUSTRY Ltd",
+      "updated": "2026-04-28"
+    },
+    "improve_sybot": {
+      "value": "making SYBOT more advanced",
+      "updated": "2026-04-28"
+    }
+  },
+  "relationships": {
+    "friend_name": {
+      "value": "Nshuti Moise",
+      "updated": "2026-04-28"
+    }
+  },
+  "wishes": {
+    "goals": {
+      "value": "Build advanced AI systems (SYBOT), automate workflows, develop secure platforms, grow SYCOM INDUSTRY",
+      "updated": "2026-04-28"
+    }
+  },
+  "notes": {},
+  "users": {
+    "leader_001": {
+      "created": "2026-04-29T09:09:14.249830",
+      "profile": {},
+      "preferences": {
+        "test_key": {
+          "value": "test_value",
+          "updated": "2026-04-29T09:09:14.249868"
+        }
+      },
+      "projects": {},
+      "relationships": {},
+      "wishes": {},
+      "notes": {},
+      "interaction_history": []
+    }
+  },
+  "last_updated": "2026-04-29T09:09:14.249871"
+}

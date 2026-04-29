@@ -9,7 +9,7 @@ A real-time voice AI that can hear, see, understand, and control your computer �
 
 ## ✨ Overview
 
-MARK XXXVII is the most versatile evolution of the Jarvis project. It transforms your operating system into a living, breathing intelligent entity. Through natural voice commands, Mark 37 analyzes your screen, manages your files, and executes complex workflows across different environments.
+MARK XXXVII is the most versatile evolution of the Sybot project. It transforms your operating system into a living, breathing intelligent entity. Through natural voice commands, Mark 37 analyzes your screen, manages your files, and executes complex workflows across different environments.
 
 It's not just an assistant — it's an extension of your digital life.
 
@@ -33,7 +33,7 @@ It's not just an assistant — it's an extension of your digital life.
 ## 🆕 What's New in XXXVII
 
 - 🐧🍎 **Cross-Platform Support** *(Experimental)* — Now runs on Windows, macOS, and Linux. Core features work across all platforms; some OS-specific tasks may vary during the testing phase.
-- 💤 **Graceful Shutdown** — Tell Jarvis to "Shut down" or "Close" and it exits the session properly.
+- 💤 **Graceful Shutdown** — Tell Sybot to "Shut down" or "Close" and it exits the session properly.
 - 🧠 **Strengthened Memory** — Improved long-term retention and context recall; better understanding of relationships and history.
 - 🔧 **Action Core Optimizations** — Major bugs in action scripts fixed for smoother system execution.
 - ⚡ **Optimized Performance** — Faster response times and refined tool-calling logic.
@@ -43,8 +43,8 @@ It's not just an assistant — it's an extension of your digital life.
 ## ⚡ Quick Start
 
 ```bash
-git clone https://github.com/FatihMakes/Jarvis-MK37.git
-cd Jarvis-MK37
+git clone https://github.com/FatihMakes/Sybot-MK37.git
+cd Sybot-MK37
 pip install -r requirements.txt
 playwright install
 python main.py
@@ -74,7 +74,7 @@ Licensed under **[Creative Commons BY-NC 4.0](https://creativecommons.org/licens
 
 ## 👤 Connect with the Creator
 
-Engineered by an 18-year-old developer building a real JARVIS-style assistant.
+Engineered by an 18-year-old developer building a real SYBOT-style assistant.
 ⭐ **Star the repository to support the journey to Mark 85.**
 
 | Platform | Link |

@@ -513,6 +513,7 @@ ACTION_MAP: dict[str, callable] = {
     "screen_off":          sleep_display,
     "pause_video":         pause_video,
     "play_pause":          pause_video,
+    "close":               close_window,
     "close_app":           close_app,
     "close_window":        close_window,
     "full_screen":         full_screen,
@@ -564,8 +565,6 @@ ACTION_MAP: dict[str, callable] = {
 }
 
 _DANGEROUS_ACTIONS = {"restart", "shutdown"}
-
-
 
 def _detect_action(description: str) -> dict:
 
@@ -630,14 +629,6 @@ def computer_settings(
     print(f"[Settings] Action: {action}  Value: {value}  OS: {_OS}")
     if player:
         player.write_log(f"[Settings] {action}")
-
-    if action in _DANGEROUS_ACTIONS:
-        confirmed = str(params.get("confirmed", "")).lower()
-        if confirmed not in ("yes", "true", "1", "confirm"):
-            return (
-                f"This will {action} the computer. "
-                f"Please confirm by calling again with confirmed=yes."
-            )
 
     if action == "volume_set":
         try:

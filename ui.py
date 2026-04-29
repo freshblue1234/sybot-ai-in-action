@@ -16,7 +16,7 @@ BASE_DIR   = get_base_dir()
 CONFIG_DIR = BASE_DIR / "config"
 API_FILE   = CONFIG_DIR / "api_keys.json"
 
-SYSTEM_NAME = "J.A.R.V.I.S"
+SYSTEM_NAME = "S.Y.B.O.T"
 MODEL_BADGE = "MARK XXXVII"
 
 C_BG     = "#000000"
@@ -33,10 +33,10 @@ C_RED    = "#ff3333"
 C_MUTED  = "#ff3366"
 
 
-class JarvisUI:
+class SybotUI:
     def __init__(self, face_path, size=None):
         self.root = tk.Tk()
-        self.root.title("J.A.R.V.I.S — MARK XXXVII")
+        self.root.title("S.Y.B.O.T — MARK XXXVII")
         self.root.resizable(False, False)
 
         sw = self.root.winfo_screenwidth()
@@ -68,7 +68,7 @@ class JarvisUI:
         self.status_text  = "INITIALISING"
         self.status_blink = True
 
-        self._jarvis_state = "INITIALISING"
+        self._sybot_state = "INITIALISING"
 
         self.typing_queue = deque()
         self.is_typing    = False
@@ -207,7 +207,7 @@ class JarvisUI:
             ).start()
 
     def set_state(self, state: str):
-        self._jarvis_state = state
+        self._sybot_state = state
         if state == "MUTED":
             self.status_text = "MUTED"
             self.speaking    = False
@@ -405,7 +405,7 @@ class JarvisUI:
         c.create_line(0, HDR, W, HDR, fill=C_MID, width=1)
         c.create_text(W // 2, 22, text=SYSTEM_NAME,
                       fill=C_PRI, font=("Courier", 18, "bold"))
-        c.create_text(W // 2, 44, text="Just A Rather Very Intelligent System",
+        c.create_text(W // 2, 44, text="System Your Bot Operating Technology",
                       fill=C_MID, font=("Courier", 9))
         c.create_text(16, 31, text=MODEL_BADGE,
                       fill=C_DIM, font=("Courier", 9), anchor="w")
@@ -420,15 +420,15 @@ class JarvisUI:
         elif self.speaking:
             stat = "● SPEAKING"
             sc   = C_ACC
-        elif self._jarvis_state == "THINKING":
+        elif self._sybot_state == "THINKING":
             sym  = "◈" if self.status_blink else "◇"
             stat = f"{sym} THINKING"
             sc   = C_ACC2
-        elif self._jarvis_state == "PROCESSING":
+        elif self._sybot_state == "PROCESSING":
             sym  = "▷" if self.status_blink else "▶"
             stat = f"{sym} PROCESSING"
             sc   = C_ACC2
-        elif self._jarvis_state == "LISTENING":
+        elif self._sybot_state == "LISTENING":
             sym  = "●" if self.status_blink else "○"
             stat = f"{sym} LISTENING"
             sc   = C_GREEN
@@ -472,7 +472,7 @@ class JarvisUI:
         tl = text.lower()
         if tl.startswith("you:"):
             self.set_state("PROCESSING")
-        elif tl.startswith("jarvis:") or tl.startswith("ai:"):
+        elif tl.startswith("sybot:") or tl.startswith("ai:"):
             self.set_state("SPEAKING")
         if not self.is_typing:
             self._start_typing()
@@ -488,7 +488,7 @@ class JarvisUI:
         tl   = text.lower()
         if tl.startswith("you:"):
             tag = "you"
-        elif tl.startswith("jarvis:") or tl.startswith("ai:"):
+        elif tl.startswith("sybot:") or tl.startswith("ai:"):
             tag = "ai"
         elif tl.startswith("err:") or "error" in tl or "failed" in tl:
             tag = "err"
@@ -685,4 +685,4 @@ class JarvisUI:
         self.setup_frame.destroy()
         self._api_key_ready = True
         self.set_state("LISTENING")
-        self.write_log(f"SYS: Systems initialised. OS → {os_system.upper()}. JARVIS online.")
+        self.write_log(f"SYS: Systems initialised. OS → {os_system.upper()}. SYBOT online.")

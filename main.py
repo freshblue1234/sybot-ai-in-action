@@ -4,12 +4,23 @@ import threading
 import json
 import sys
 import traceback
+import hashlib
 from pathlib import Path
+
+import numpy as np
 
 import sounddevice as sd
 from google import genai
 from google.genai import types
-from ui import JarvisUI
+from ui import SybotUI
+from core.user_manager import UserManager
+from core.memory_manager import MemoryManager
+from core.voice_engine import VoiceEngine
+from core.emotion_detector import EmotionDetector
+from core.advisor_engine import AdvisorEngine
+from core.health_monitor import HealthMonitor
+from core.backup_system import BackupSystem
+from core.camera_vision import CameraVision
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
 )
@@ -58,7 +69,7 @@ def _load_system_prompt() -> str:
         return PROMPT_PATH.read_text(encoding="utf-8")
     except Exception:
         return (
-            "You are JARVIS, Tony Stark's AI assistant. "
+            "You are SYBOT, an advanced AI assistant. "
             "Be concise, direct, and always use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool."
         )
@@ -375,11 +386,11 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-        "name": "shutdown_jarvis",
+        "name": "shutdown_sybot",
         "description": (
             "Shuts down the assistant completely. "
             "Call this when the user expresses intent to end the conversation, "
-            "close the assistant, say goodbye, or stop Jarvis. "
+            "close the assistant, say goodbye, or stop Sybot. "
             "The user can say this in ANY language."
         ),
         "parameters": {
@@ -417,12 +428,45 @@ TOOL_DECLARATIONS = [
             "required": ["category", "key", "value"]
         }
     },
+    {
+        "name": "enroll_voice",
+        "description": (
+            "Enroll the current user's voice for automatic identification. "
+            "Call this when the user wants to register their voice so SYBOT can recognize them automatically in future sessions. "
+            "This requires the user to speak for a few seconds. "
+            "No login or password needed - voice is the only identifier."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "user_name": {"type": "STRING", "description": "Name of the user to enroll (optional - uses current user if not provided)"},
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "camera_vision",
+        "description": (
+            "Controls continuous camera vision to see and comment on what's happening in real-time. "
+            "Use this to start or stop the camera feed. "
+            "When active, SYBOT will watch through the camera and speak about what it sees, "
+            "like a human observer commenting on activities."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "start | stop (default: start)"},
+                "camera_index": {"type": "INTEGER", "description": "Camera device index (default: 0)"},
+            },
+            "required": []
+        }
+    },
 ]
 
 
-class JarvisLive:
+class SybotLive:
 
-    def __init__(self, ui: JarvisUI):
+    def __init__(self, ui: SybotUI):
         self.ui             = ui
         self.session        = None
         self.audio_in_queue = None
@@ -433,9 +477,43 @@ class JarvisLive:
         self.ui.on_text_command = self._on_text_command
         self._turn_done_event: asyncio.Event | None = None
 
+        # NEW: Initialize advanced systems
+        self.user_manager = UserManager(BASE_DIR)
+        self.memory_manager = MemoryManager(BASE_DIR)
+        self.voice_engine = VoiceEngine(BASE_DIR)
+        self.emotion_detector = EmotionDetector(BASE_DIR)
+        self.advisor_engine = AdvisorEngine(BASE_DIR)
+        
+        # Initialize health monitoring and backup system
+        self.health_monitor = HealthMonitor(BASE_DIR)
+        self.backup_system = BackupSystem(BASE_DIR)
+        
+        # Initialize camera vision system
+        self.camera_vision = CameraVision(BASE_DIR, on_commentary=self._on_camera_commentary)
+        
+        # Register failover callbacks
+        self.health_monitor.register_failover_callback(self._on_failover)
+        self.health_monitor.register_recovery_callback(self._on_recovery)
+        
+        # Start health monitoring
+        self.health_monitor.start_monitoring()
+        
+        # Set current user (default to leader)
+        self.user_manager.set_current_user(
+            user_id=UserManager.LEADER_ID,
+            name=UserManager.LEADER_NAME
+        )
+
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+        # Text input uses the same current user context as voice
+        # No user identification needed - maintain existing session
+        current_user = self.user_manager.get_current_user()
+        if current_user:
+            self.ui.write_log(f"[Text] {current_user.name}: {text}")
+        else:
+            self.ui.write_log(f"[Text]: {text}")
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -467,6 +545,23 @@ class JarvisLive:
         short = str(error)[:120]
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Sir, {tool_name} encountered an error. {short}")
+    
+    def _on_failover(self):
+        """Handle failover to backup system"""
+        self.backup_system.activate()
+        self.ui.write_log("SYS: Failover to backup mode")
+        self.speak("Sir, switching to backup mode due to system issues.")
+    
+    def _on_recovery(self):
+        """Handle recovery to primary system"""
+        self.backup_system.deactivate()
+        self.ui.write_log("SYS: Recovery to primary mode")
+        self.speak("Sir, back to full operation mode.")
+
+    def _on_camera_commentary(self, commentary: str):
+        """Handle camera vision commentary - speak what the camera sees"""
+        if not self._is_speaking:  # Only speak if not already speaking
+            self.speak(commentary)
 
     def _build_config(self) -> types.LiveConnectConfig:
         from datetime import datetime
@@ -508,7 +603,7 @@ class JarvisLive:
         name = fc.name
         args = dict(fc.args or {})
 
-        print(f"[JARVIS] 🔧 {name}  {args}")
+        print(f"[SYBOT] 🔧 {name}  {args}")
         self.ui.set_state("THINKING")
 
         # ── save_memory: sessiz ve hızlı ──────────────────────────────────────
@@ -524,6 +619,70 @@ class JarvisLive:
             return types.FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": "ok", "silent": True}
+            )
+        
+        # ── enroll_voice: Voice enrollment for automatic identification ──────────
+        if name == "enroll_voice":
+            user_name = args.get("user_name")
+            current_user = self.user_manager.get_current_user()
+            if not user_name and current_user:
+                user_name = current_user.name
+            
+            if not user_name:
+                result = "Please provide a user name for voice enrollment."
+            else:
+                # Get audio from buffer
+                audio_data, sample_rate = self.voice_engine.get_combined_audio()
+                if audio_data is not None:
+                    user_id = f"user_{hashlib.md5(user_name.encode()).hexdigest()[:8]}"
+                    success = self.voice_engine.enroll_user_voice(
+                        user_id, user_name, audio_data, sample_rate
+                    )
+                    if success:
+                        # Auto-enroll in user manager
+                        self.user_manager.auto_enroll_user(user_id, user_name)
+                        result = f"Voice enrolled for {user_name}. SYBOT will now recognize you automatically."
+                    else:
+                        result = "Voice enrollment failed. Please try again."
+                else:
+                    result = "No audio collected. Please speak for a few seconds and try again."
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+        
+        # ── camera_vision: Continuous camera vision with real-time commentary ────────
+        if name == "camera_vision":
+            action = args.get("action", "start")
+            camera_index = args.get("camera_index", 0)
+            
+            if action == "start":
+                if not self.camera_vision.is_available():
+                    result = "Camera vision not available. OpenCV or NumPy not installed."
+                elif self.camera_vision.is_running:
+                    result = "Camera is already running."
+                else:
+                    success = self.camera_vision.start_camera(camera_index)
+                    if success:
+                        result = f"Camera {camera_index} started. I'll watch and comment on what I see."
+                        self.ui.write_log(f"[Camera] Started camera {camera_index}")
+                    else:
+                        result = f"Failed to start camera {camera_index}."
+            elif action == "stop":
+                self.camera_vision.stop_camera()
+                result = "Camera stopped."
+                self.ui.write_log("[Camera] Stopped")
+            else:
+                result = f"Unknown action: {action}. Use 'start' or 'stop'."
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
             )
 
         loop   = asyncio.get_event_loop()
@@ -606,7 +765,7 @@ class JarvisLive:
                 r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
                 result = r or "Done."
 
-            elif name == "shutdown_jarvis":
+            elif name == "shutdown_sybot":
                 self.ui.write_log("SYS: Shutdown requested.")
                 self.speak("Goodbye, sir.")
                 def _shutdown():
@@ -626,7 +785,7 @@ class JarvisLive:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
-        print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
+        print(f"[SYBOT] 📤 {name} → {str(result)[:80]}")
         return types.FunctionResponse(
             id=fc.id, name=name,
             response={"result": result}
@@ -638,14 +797,56 @@ class JarvisLive:
             await self.session.send_realtime_input(media=msg)
 
     async def _listen_audio(self):
-        print("[JARVIS] 🎤 Mic started")
+        print("[SYBOT] 🎤 Mic started")
         loop = asyncio.get_event_loop()
+        
+        # Audio buffer for voice identification
+        audio_buffer = []
+        buffer_sample_count = 0
+        SAMPLES_FOR_IDENTIFICATION = 16000 * 2  # 2 seconds of audio
 
         def callback(indata, frames, time_info, status):
+            nonlocal buffer_sample_count, audio_buffer
             with self._speaking_lock:
-                jarvis_speaking = self._is_speaking
-            if not jarvis_speaking and not self.ui.muted:
+                sybot_speaking = self._is_speaking
+            if not sybot_speaking and not self.ui.muted:
                 data = indata.tobytes()
+                
+                # Collect audio for voice identification
+                audio_buffer.append(indata.copy())
+                buffer_sample_count += frames
+                
+                # Also collect for voice enrollment
+                self.voice_engine.collect_audio_sample(indata.copy(), SEND_SAMPLE_RATE)
+                
+                # Try voice identification every 2 seconds
+                if buffer_sample_count >= SAMPLES_FOR_IDENTIFICATION:
+                    try:
+                        combined_audio = np.concatenate(audio_buffer)
+                        # Convert to float32 for processing
+                        audio_float32 = combined_audio.astype(np.float32) / 32768.0
+                        
+                        # Identify speaker
+                        identified_user_id = self.voice_engine.identify_speaker(
+                            audio_float32, 
+                            SEND_SAMPLE_RATE
+                        )
+                        
+                        if identified_user_id:
+                            # Switch to identified user automatically
+                            profile = self.user_manager.identify_user_by_voice(identified_user_id)
+                            if profile:
+                                self.ui.write_log(f"[Voice] Identified: {profile.name}")
+                        
+                        # Clear buffer
+                        audio_buffer.clear()
+                        buffer_sample_count = 0
+                        
+                    except Exception as e:
+                        print(f"[SYBOT] Voice identification error: {e}")
+                        audio_buffer.clear()
+                        buffer_sample_count = 0
+                
                 loop.call_soon_threadsafe(
                     self.out_queue.put_nowait,
                     {"data": data, "mime_type": "audio/pcm"}
@@ -659,15 +860,15 @@ class JarvisLive:
                 blocksize=CHUNK_SIZE,
                 callback=callback,
             ):
-                print("[JARVIS] 🎤 Mic stream open")
+                print("[SYBOT] 🎤 Mic stream open")
                 while True:
                     await asyncio.sleep(0.1)
         except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
+            print(f"[SYBOT] ❌ Mic: {e}")
             raise
 
     async def _receive_audio(self):
-        print("[JARVIS] 👂 Recv started")
+        print("[SYBOT] 👂 Recv started")
         out_buf, in_buf = [], []
 
         try:
@@ -703,13 +904,13 @@ class JarvisLive:
 
                             full_out = " ".join(out_buf).strip()
                             if full_out:
-                                self.ui.write_log(f"Jarvis: {full_out}")
+                                self.ui.write_log(f"Sybot: {full_out}")
                             out_buf = []
 
                     if response.tool_call:
                         fn_responses = []
                         for fc in response.tool_call.function_calls:
-                            print(f"[JARVIS] 📞 {fc.name}")
+                            print(f"[SYBOT] 📞 {fc.name}")
                             fr = await self._execute_tool(fc)
                             fn_responses.append(fr)
                         await self.session.send_tool_response(
@@ -717,12 +918,12 @@ class JarvisLive:
                         )
 
         except Exception as e:
-            print(f"[JARVIS] ❌ Recv: {e}")
+            print(f"[SYBOT] ❌ Recv: {e}")
             traceback.print_exc()
             raise
 
     async def _play_audio(self):
-        print("[JARVIS] 🔊 Play started")
+        print("[SYBOT] 🔊 Play started")
 
         stream = sd.RawOutputStream(
             samplerate=RECEIVE_SAMPLE_RATE,
@@ -753,7 +954,7 @@ class JarvisLive:
                 await asyncio.to_thread(stream.write, chunk)
 
         except Exception as e:
-            print(f"[JARVIS] ❌ Play: {e}")
+            print(f"[SYBOT] ❌ Play: {e}")
             raise
         finally:
             self.set_speaking(False)
@@ -768,7 +969,7 @@ class JarvisLive:
 
         while True:
             try:
-                print("[JARVIS] 🔌 Connecting...")
+                print("[SYBOT] 🔌 Connecting...")
                 self.ui.set_state("THINKING")
                 config = self._build_config()
 
@@ -779,12 +980,12 @@ class JarvisLive:
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
                     self.audio_in_queue = asyncio.Queue()
-                    self.out_queue      = asyncio.Queue(maxsize=10)
+                    self.out_queue      = asyncio.Queue(maxsize=100)
                     self._turn_done_event = asyncio.Event()
 
-                    print("[JARVIS] ✅ Connected.")
+                    print("[SYBOT] ✅ Connected.")
                     self.ui.set_state("LISTENING")
-                    self.ui.write_log("SYS: JARVIS online.")
+                    self.ui.write_log("SYS: SYBOT online.")
 
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
@@ -792,23 +993,23 @@ class JarvisLive:
                     tg.create_task(self._play_audio())
 
             except Exception as e:
-                print(f"[JARVIS] ⚠️ {e}")
+                print(f"[SYBOT] ⚠️ {e}")
                 traceback.print_exc()
 
             self.set_speaking(False)
             self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
+            print("[SYBOT] 🔄 Reconnecting in 3s...")
             await asyncio.sleep(3)
 
 
 def main():
-    ui = JarvisUI("face.png")
+    ui = SybotUI("face.png")
 
     def runner():
         ui.wait_for_api_key()
-        jarvis = JarvisLive(ui)
+        sybot = SybotLive(ui)
         try:
-            asyncio.run(jarvis.run())
+            asyncio.run(sybot.run())
         except KeyboardInterrupt:
             print("\n🔴 Shutting down...")
 

@@ -1,0 +1,38 @@
+# SYBOT Advanced Multi-User System Requirements
+
+# Core Dependencies (existing)
+google-generativeai>=0.8.0
+pyautogui>=0.9.54
+pyperclip>=1.8.2
+sounddevice>=0.4.6
+numpy>=1.24.0
+
+# Voice & Speech Recognition
+speechrecognition>=3.10.0
+pydub>=0.25.1
+# webrtcvad>=2.0.10  # Requires Visual C++ build tools - optional
+librosa>=0.10.0
+soundfile>=0.12.1
+
+# Speaker Recognition (optional - requires large download)
+# speechbrain>=0.5.16
+# resemblyzer>=0.2.4
+
+# Emotion Detection (optional - requires large download)
+# transformers>=4.36.0
+# torch>=2.1.0
+
+# Database & Memory (sqlite3 is built-in)
+
+# Web & Browser
+playwright>=1.40.0
+selenium>=4.15.0
+
+# Other Utilities
+psutil>=5.9.0
+pycaw>=20230404
+send2trash>=1.8.2
+comtypes>=1.2.0
+
+# Development
+pytest>=7.4.0
