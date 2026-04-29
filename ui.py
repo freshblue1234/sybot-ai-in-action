@@ -8,7 +8,10 @@ from pathlib import Path
 
 def get_base_dir():
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
+        # When running as executable, use AppData for config to ensure persistence
+        import os
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        return Path(appdata) / "SYBOT"
     return Path(__file__).resolve().parent
 
 

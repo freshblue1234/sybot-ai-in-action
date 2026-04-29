@@ -21,6 +21,10 @@ from core.advisor_engine import AdvisorEngine
 from core.health_monitor import HealthMonitor
 from core.backup_system import BackupSystem
 from core.camera_vision import CameraVision
+from core.entertainment_system import EntertainmentSystem
+from core.skill_system import SkillSystem
+from core.code_sandbox import CodeSandbox
+from core.tool_expander import ToolExpander
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
 )
@@ -461,6 +465,72 @@ TOOL_DECLARATIONS = [
             "required": []
         }
     },
+    {
+        "name": "entertainment",
+        "description": (
+            "Provides entertainment features like jokes, singing simulation, and music playback. "
+            "Use this to tell jokes, simulate singing, or play music. "
+            "For music, add MP3 or WAV files to the music directory."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "joke | sing | play_music | stop_music | chat"},
+                "content": {"type": "STRING", "description": "Song name for singing, track name for music, or chat category (greeting, how_are_you, thanks, goodbye, compliment)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "skill_manager",
+        "description": (
+            "Manages SYBOT's modular skill system. Use to add, list, search, or delete skills. "
+            "Skills are reusable capabilities that SYBOT learns and improves over time."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {"type": "STRING", "description": "add | list | search | delete | stats"},
+                "name": {"type": "STRING", "description": "Skill name (for add action)"},
+                "category": {"type": "STRING", "description": "Skill category (for add action)"},
+                "code": {"type": "STRING", "description": "Skill code (for add action)"},
+                "description": {"type": "STRING", "description": "Skill description (for add action)"},
+                "query": {"type": "STRING", "description": "Search query (for search action)"},
+                "skill_id": {"type": "STRING", "description": "Skill ID (for delete action)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "code_execute",
+        "description": (
+            "Executes code in a safe sandbox environment. Use for testing code snippets or running small scripts. "
+            "The sandbox has safety restrictions to prevent system damage."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "code": {"type": "STRING", "description": "Python code to execute"},
+                "timeout": {"type": "INTEGER", "description": "Execution timeout in seconds (default: 10)"},
+            },
+            "required": ["code"]
+        }
+    },
+    {
+        "name": "expand_capability",
+        "description": (
+            "Automatically expands SYBOT's capabilities by installing packages or creating skills. "
+            "Use when SYBOT needs a capability it doesn't have."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "capability": {"type": "STRING", "description": "Name of the capability to add"},
+                "description": {"type": "STRING", "description": "Description of what the capability should do"},
+            },
+            "required": ["capability"]
+        }
+    },
 ]
 
 
@@ -490,6 +560,18 @@ class SybotLive:
         
         # Initialize camera vision system
         self.camera_vision = CameraVision(BASE_DIR, on_commentary=self._on_camera_commentary)
+        
+        # Initialize entertainment system
+        self.entertainment = EntertainmentSystem(BASE_DIR)
+        
+        # Initialize skill system
+        self.skill_system = SkillSystem(BASE_DIR)
+        
+        # Initialize code sandbox
+        self.sandbox = CodeSandbox(BASE_DIR)
+        
+        # Initialize tool expander
+        self.tool_expander = ToolExpander(BASE_DIR, self.skill_system, self.sandbox)
         
         # Register failover callbacks
         self.health_monitor.register_failover_callback(self._on_failover)
@@ -562,6 +644,18 @@ class SybotLive:
         """Handle camera vision commentary - speak what the camera sees"""
         if not self._is_speaking:  # Only speak if not already speaking
             self.speak(commentary)
+    
+    def _check_wake_word(self, text: str):
+        """Check if wake word is in transcribed text"""
+        text_lower = text.lower()
+        wake_words = ["hey sybot", "sybot", "hey s y bot", "sai bot"]
+        
+        for wake_word in wake_words:
+            if wake_word in text_lower:
+                self.ui.write_log("[WakeWord] Detected!")
+                self.speak("Yes sir, I'm listening.")
+                return True
+        return False
 
     def _build_config(self) -> types.LiveConnectConfig:
         from datetime import datetime
@@ -677,6 +771,136 @@ class SybotLive:
                 self.ui.write_log("[Camera] Stopped")
             else:
                 result = f"Unknown action: {action}. Use 'start' or 'stop'."
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+        
+        # ── entertainment: Jokes, singing, music, chat ─────────────────────────────
+        if name == "entertainment":
+            action = args.get("action", "")
+            content = args.get("content", "")
+            
+            if action == "joke":
+                result = self.entertainment.get_joke()
+            elif action == "sing":
+                song = content if content else "a song"
+                result = self.entertainment.simulate_singing(song)
+            elif action == "play_music":
+                track = content if content else None
+                result = self.entertainment.play_music(track)
+            elif action == "stop_music":
+                result = self.entertainment.stop_music()
+            elif action == "chat":
+                category = content if content else "greeting"
+                result = self.entertainment.get_chat_response(category)
+            else:
+                result = f"Unknown entertainment action: {action}. Use joke, sing, play_music, stop_music, or chat."
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+        
+        # ── skill_manager: Manage modular skills ───────────────────────────────────
+        if name == "skill_manager":
+            action = args.get("action", "")
+            
+            if action == "add":
+                skill_name = args.get("name", "")
+                category = args.get("category", "general")
+                code = args.get("code", "")
+                description = args.get("description", "")
+                
+                if not skill_name or not code:
+                    result = "Skill name and code are required for add action."
+                else:
+                    skill_id = self.skill_system.add_skill(skill_name, category, code, description)
+                    result = f"Skill '{skill_name}' added with ID: {skill_id}"
+            
+            elif action == "list":
+                skills = self.skill_system.get_all_skills()
+                if skills:
+                    skill_list = "\n".join([f"- {s.name} ({s.category}) - {s.skill_id}" for s in skills])
+                    result = f"Skills ({len(skills)}):\n{skill_list}"
+                else:
+                    result = "No skills available."
+            
+            elif action == "search":
+                query = args.get("query", "")
+                if not query:
+                    result = "Query required for search action."
+                else:
+                    skills = self.skill_system.search_skills(query)
+                    if skills:
+                        skill_list = "\n".join([f"- {s.name}: {s.description}" for s in skills])
+                        result = f"Found {len(skills)} skills:\n{skill_list}"
+                    else:
+                        result = f"No skills found for '{query}'."
+            
+            elif action == "delete":
+                skill_id = args.get("skill_id", "")
+                if not skill_id:
+                    result = "Skill ID required for delete action."
+                else:
+                    if self.skill_system.delete_skill(skill_id):
+                        result = f"Skill {skill_id} deleted."
+                    else:
+                        result = f"Skill {skill_id} not found."
+            
+            elif action == "stats":
+                stats = self.skill_system.get_skill_stats()
+                result = f"Skill Statistics:\n- Total skills: {stats['total_skills']}\n- Total usage: {stats['total_usage']}\n- Average success rate: {stats['average_success_rate']:.2%}\n- Categories: {stats['categories']}"
+            
+            else:
+                result = f"Unknown skill_manager action: {action}. Use add, list, search, delete, or stats."
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+        
+        # ── code_execute: Execute code in sandbox ─────────────────────────────────
+        if name == "code_execute":
+            code = args.get("code", "")
+            timeout = args.get("timeout", 10)
+            
+            if not code:
+                result = "Code is required for execution."
+            else:
+                exec_result = self.sandbox.execute_python(code, timeout)
+                if exec_result["success"]:
+                    result = f"Code executed successfully.\nOutput:\n{exec_result['output']}"
+                else:
+                    result = f"Code execution failed: {exec_result['error']}"
+            
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+        
+        # ── expand_capability: Auto-expand SYBOT capabilities ─────────────────────
+        if name == "expand_capability":
+            capability = args.get("capability", "")
+            description = args.get("description", "")
+            
+            if not capability:
+                result = "Capability name is required."
+            else:
+                expand_result = self.tool_expander.expand_capability(capability, description)
+                if expand_result["success"]:
+                    result = f"Capability '{capability}' expanded: {expand_result['message']}"
+                else:
+                    result = f"Failed to expand capability '{capability}': {expand_result['message']}"
             
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
@@ -892,6 +1116,8 @@ class SybotLive:
                             txt = _clean_transcript(sc.input_transcription.text)
                             if txt:
                                 in_buf.append(txt)
+                                # Check for wake word in transcription
+                                self._check_wake_word(txt)
 
                         if sc.turn_complete:
                             if self._turn_done_event:
