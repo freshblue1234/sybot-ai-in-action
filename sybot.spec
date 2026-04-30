@@ -39,6 +39,9 @@ hiddenimports = [
     'webrtcvad',
     'mss',
     'duckduckgo_search',
+    'httpx',
+    'watchdog',
+    'psutil',
 ]
 
 a = Analysis(
