@@ -1,0 +1,26 @@
+# API keys and sensitive config
+config/api_keys.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Memory files
+memory/*.json
+!memory/long_term.json
